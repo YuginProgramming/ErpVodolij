@@ -1,0 +1,18 @@
+{
+  "name": "erpvodolij",
+  "version": "1.0.0",
+  "description": "ERP system for Vodolij enterprise",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "test": "test"
+  },
+  "keywords": [
+    "erp"
+  ],
+  "author": "itGin",
+  "license": "ISC",
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}
