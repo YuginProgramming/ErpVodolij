@@ -13,6 +13,10 @@
   "author": "itGin",
   "license": "ISC",
   "dependencies": {
-    "node-telegram-bot-api": "^0.66.0"
+    "axios": "^1.10.0",
+    "luxon": "^3.6.1",
+    "node-telegram-bot-api": "^0.66.0",
+    "pg": "^8.16.3",
+    "sequelize": "^6.37.7"
   }
 }
