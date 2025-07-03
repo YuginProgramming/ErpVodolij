@@ -2,9 +2,11 @@ import TelegramBot from 'node-telegram-bot-api';
 import { dataBot } from './values.js';
 import { endedShiftKeyb, locationKeyboard, processKeyb, startShift } from './keyboards.js';
 import { createNewWorkerByChatId, findWorkerByChatId, updateWorkerByChatId } from './models/workers.js';
-import { createNewPoint } from './models/work-datapoint.js';
+import { createNewPoint, todayPoins } from './models/work-datapoint.js';
 import geocode from './modules/geocode.js';
 import axios from 'axios';
+import { getShiftDuration } from './modules/shift-duration.js';
+import { getRouteDistanceAndMapLink } from './models/distance-link.js';
 
 export const bot = new TelegramBot(dataBot.telegramBotToken, { polling: true });
 
@@ -162,9 +164,18 @@ bot.on("location", async (msg) => {
                         address: address
             
                     });
+
+                    const shiftPoints = await todayPoins(worker.id);
+
+                    const durationString = getShiftDuration(shiftPoints);
+
+                    const { distanceKm, mapLink } = await getRouteDistanceAndMapLink(shiftPoints);
             
                     const message = 
                         `🔔 Зміну завершено.\n` +
+                        `Зміна тривала: ${durationString}\n` +
+                        `Протяжність маршруту: ${distanceKm}\n` +
+                        `Посилання на маршрут на карті: ${mapLink}\n` +
                         `Ви знаходитесь за адресою: ${address}.\n` +
                         `Найближчий автомат: ${nearest.id}.\n\n` +
                         `Оберіть операцію:`;
