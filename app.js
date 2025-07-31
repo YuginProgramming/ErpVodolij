@@ -7,6 +7,7 @@ import geocode from './modules/geocode.js';
 import axios from 'axios';
 import { getShiftDuration } from './modules/shift-duration.js';
 import { getRouteDistanceAndMapLink } from './models/distance-link.js';
+import { findActiveTasksByWorker, markTaskAsDone } from './models/tasks.js';
 
 export const bot = new TelegramBot(dataBot.telegramBotToken, { polling: true });
 
@@ -31,6 +32,7 @@ const findNearestCoordinate = (coordinates, targetCoordinate) => {
 
 bot.setMyCommands([
     { command: '/start', description: 'Почати спочатку' },
+    { command: '/tasks', description: 'Список завдань'}
 ]);
 
 bot.onText(/\/start/, async (msg) => {
@@ -72,6 +74,48 @@ bot.onText(/\/start/, async (msg) => {
         
 
     }
+
+});
+
+bot.onText(/\/tasks/, async (msg) => {
+
+  const chatId = msg.chat.id;
+
+  const worker = await findWorkerByChatId(chatId);
+
+  console.log(worker.id)
+  if (worker) {
+
+    const tasks = await findActiveTasksByWorker(worker.id);
+
+    console.log(tasks);
+
+    if (!tasks || tasks.length === 0) {
+      return bot.sendMessage(chatId, '🎉 У вас немає активних завдань!');
+    }
+
+    for (const task of tasks) {
+      const taskText = `📌 *${task.title}*\n🗒️ ${task.description || 'Без опису'}\n📟  Апарат: ${task.deviceId || 'Невідомо'}\n🎯 Пріоритет: ${task.priority || 'Нормальний'}`;
+      
+      await bot.sendMessage(chatId, taskText, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[
+            {
+              text: '✅ Виконано',
+              callback_data: `done_${task.id}`,
+            }
+          ]]
+        }
+      });
+    
+    }
+
+  } else {
+
+      
+
+  }
 
 });
 
@@ -258,9 +302,9 @@ bot.on('callback_query', async (callbackQuery) => {
 
     const msg = callbackQuery.message;
     const data = callbackQuery.data;
-    const chatId = msg.chat.id;
+    const chatId = msg.chat.id;    
   
-    switch (data) {
+    switch (data) {      
 
       case 'end_shift':
 
@@ -294,7 +338,30 @@ bot.on('callback_query', async (callbackQuery) => {
         break;
   
       default:
-        bot.sendMessage(chatId, 'Невідома команда. Спробуйте ще раз.');
+        
+        if (data.startsWith('done_')) {
+            const taskId = data.split('_')[1];
+    
+            await markTaskAsDone(taskId); 
+        
+            await bot.editMessageReplyMarkup(
+              { inline_keyboard: [] },
+              {
+                chat_id: chatId,
+                message_id: msg.message_id
+              }
+            );
+        
+            await bot.sendMessage(chatId, '✅ Завдання виконано!');
+
+        } else {
+
+            bot.sendMessage(chatId, 'Невідома команда. Спробуйте ще раз.');
+
+        }
+
+        
+        
     }
   
     // Підтвердити callback, щоб зняти "завантаження" на кнопці
