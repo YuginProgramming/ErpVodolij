@@ -8,6 +8,7 @@ import axios from 'axios';
 import { getShiftDuration } from './modules/shift-duration.js';
 import { getRouteDistanceAndMapLink } from './models/distance-link.js';
 import { findActiveTasksByWorker, markTaskAsDone } from './models/tasks.js';
+import { createTaskForWorker } from './models/tasks.js'; 
 import 'dotenv/config';
 import { pingDb } from './models/sequelize.js';
 
@@ -33,9 +34,12 @@ const findNearestCoordinate = (coordinates, targetCoordinate) => {
 
 }
 
+const newTaskWizard = new Map(); // key: chatId -> { step, data }
+
 bot.setMyCommands([
     { command: '/start', description: 'Почати спочатку' },
-    { command: '/tasks', description: 'Список завдань'}
+    { command: '/tasks', description: 'Список завдань'},
+    { command: '/newtask', description: 'Створити задачу' }  
 ]);
 
 bot.onText(/\/start/, async (msg) => {
@@ -121,6 +125,108 @@ bot.onText(/\/tasks/, async (msg) => {
   }
 
 });
+
+// 1) Entry point: ask for title
+bot.onText(/^\/newtask$/, async (msg) => {
+  const chatId = msg.chat.id;
+  const worker = await findWorkerByChatId(chatId);
+  if (!worker) return bot.sendMessage(chatId, 'Спочатку натисніть /start, щоб зареєструватись.');
+
+  newTaskWizard.set(chatId, { step: 'title', data: {} });
+  bot.sendMessage(chatId, 'Введіть заголовок задачі (або /cancel):');
+});
+
+// 2) Capture text for the wizard
+bot.on('text', async (msg) => {
+  const chatId = msg.chat.id;
+  const st = newTaskWizard.get(chatId);
+  if (!st) return; // not in wizard
+
+  // Cancel flow
+  if (/^\/cancel$/.test(msg.text)) {
+    newTaskWizard.delete(chatId);
+    return bot.sendMessage(chatId, 'Створення скасовано.');
+  }
+
+  if (st.step === 'title') {
+    const title = (msg.text || '').trim();
+    if (!title) return bot.sendMessage(chatId, 'Заголовок не може бути порожнім. Введіть заголовок або /cancel.');
+
+    st.data.title = title;
+    st.step = 'description';
+    return bot.sendMessage(chatId, 'Короткий опис (або "-" якщо без опису):');
+  }
+
+  if (st.step === 'description') {
+    const description = (msg.text || '').trim();
+    st.data.description = description === '-' ? null : description;
+
+    // Optional: ask for deviceId; skip if you don’t need it
+    st.step = 'device';
+    return bot.sendMessage(chatId, 'ID апарата (або "-" якщо не вказувати):');
+  }
+
+  if (st.step === 'device') {
+    const raw = (msg.text || '').trim();
+    st.data.deviceId = raw === '-' ? null : Number(raw);
+    if (st.data.deviceId !== null && Number.isNaN(st.data.deviceId)) {
+      return bot.sendMessage(chatId, 'ID має бути числом або "-", спробуйте ще раз:');
+    }
+
+    // Optional: priority
+    st.step = 'priority';
+    return bot.sendMessage(chatId, 'Пріоритет (low|normal|high). За замовчуванням: normal:', {
+      reply_markup: {
+        keyboard: [[{ text: 'low' }, { text: 'normal' }, { text: 'high' }]],
+        resize_keyboard: true,
+        one_time_keyboard: true
+      }
+    });
+  }
+
+  if (st.step === 'priority') {
+    const pr = (msg.text || 'normal').toLowerCase();
+    const priority = ['low', 'normal', 'high'].includes(pr) ? pr : 'normal';
+    st.data.priority = priority;
+
+    // Confirm
+    st.step = 'confirm';
+    const preview =
+`Підтвердити створення задачі?
+
+Заголовок: ${st.data.title}
+Опис: ${st.data.description ?? '—'}
+Апарат: ${st.data.deviceId ?? '—'}
+Пріоритет: ${st.data.priority}
+
+Надішліть "ok" для підтвердження або /cancel.`;
+    return bot.sendMessage(chatId, preview, { reply_markup: { remove_keyboard: true } });
+  }
+
+  if (st.step === 'confirm') {
+    if ((msg.text || '').trim().toLowerCase() !== 'ok') {
+      return bot.sendMessage(chatId, 'Надішліть "ok" для підтвердження або /cancel.');
+    }
+
+    const worker = await findWorkerByChatId(chatId); // assignee = self
+    if (!worker) {
+      newTaskWizard.delete(chatId);
+      return bot.sendMessage(chatId, 'Користувача не знайдено. Запустіть /start.');
+    }
+
+    const taskId = await createTaskForWorker({
+      title: st.data.title,
+      description: st.data.description,
+      deviceId: st.data.deviceId,
+      priority: st.data.priority,
+      assigneeWorkerId: worker.id
+    });
+
+    newTaskWizard.delete(chatId);
+    return bot.sendMessage(chatId, `✅ Задачу #${taskId} створено (статус: todo).`);
+  }
+});
+
 
 bot.on("message", async (msg) => {
 

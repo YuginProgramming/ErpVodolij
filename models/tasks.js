@@ -44,3 +44,46 @@ export async function findActiveTasksByWorker(workerId) {
 export async function markTaskAsDone(taskId) {
   await Task.update({ status: 'done' }, { where: { id: taskId } });
 }
+
+// Creates a TODO task assigned to a worker.
+export async function createTaskForWorker({ title, description = null, assigneeWorkerId, deviceId = null, priority = 'normal' }) {
+  const qi = sequelize.getQueryInterface();
+  const desc = await qi.describeTable('tasks'); // map of columns
+
+  // Decide real column names
+  const assigneeCol = ['assignee_id', 'worker_id', 'user_id'].find(c => !!desc[c]);
+  const deviceCol   = desc.deviceId ? 'deviceId' : (desc.device_id ? 'device_id' : null);
+
+  const cols = ['title', 'status', 'priority'];
+  const vals = [title, 'todo', priority];
+  const params = ['$1', '$2', '$3'];
+  let p = 3;
+
+  if (description !== null && desc.description) {
+    cols.push('description'); vals.push(description); params.push(`$${++p}`);
+  }
+  if (assigneeCol) {
+    cols.push(assigneeCol); vals.push(assigneeWorkerId); params.push(`$${++p}`);
+  }
+  if (deviceId !== null && deviceCol) {
+    cols.push(deviceCol); vals.push(deviceId); params.push(`$${++p}`);
+  }
+  if (desc.createdAt) { 
+    cols.push('createdAt'); 
+    vals.push(new Date()); 
+    params.push(`$${++p}`); 
+  }
+  if (desc.updatedAt) { 
+    cols.push('updatedAt'); 
+    vals.push(new Date()); 
+    params.push(`$${++p}`); 
+  }
+
+  const sql = `INSERT INTO "public"."tasks" (${cols.map(c => `"${c}"`).join(', ')})
+               VALUES (${params.join(', ')})
+               RETURNING id;`;
+
+  const [rows] = await sequelize.query(sql, { bind: vals });
+  return rows[0]?.id;
+}
+
