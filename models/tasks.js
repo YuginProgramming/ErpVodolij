@@ -1,72 +1,46 @@
-import { Model, DataTypes } from "sequelize";
+// models/tasks.js
+import { DataTypes, Op } from 'sequelize';
 import { sequelize } from './sequelize.js';
 
-class Task extends Model {}
+// Модель таблиці tasks
+export const Task = sequelize.define('Task', {
+    id:          { type: DataTypes.INTEGER, primaryKey: true },
+    title:       { type: DataTypes.TEXT },
+    description: { type: DataTypes.TEXT },
+    status:      { type: DataTypes.TEXT },
+    priority:    { type: DataTypes.TEXT },
+    deviceId:    { type: DataTypes.INTEGER, field: 'deviceId' },
+  }, {
+    tableName: 'tasks',
+    schema: 'public',
+    timestamps: false,
+  });
 
-Task.init({
-    title: {
-        type: DataTypes.STRING,
-        allowNull: false
-    },
-    description: {
-        type: DataTypes.TEXT,
-        allowNull: true
-    },
-    status: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-        defaultValue: 'todo'
-    },
-    
-    priority: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-        defaultValue: 'medium'
-    },
-    deviceId: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-    },
-    completedAt: {
-        type: DataTypes.DATE,
-        allowNull: true
-    },
-    workerId: {
-        type: DataTypes.INTEGER,
-        allowNull: true
-    },
-}, {
-    freezeTableName: false,
-    timestamps: true, // createdAt, updatedAt
-    modelName: 'tasks',
-    sequelize
-});
+// Динамічно підхоплюємо назву колонки-виконавця, якщо така є
+async function assigneeWhere(workerId) {
+  const qi = sequelize.getQueryInterface();
+  const desc = await qi.describeTable('tasks'); // { columnName: { ... } }
+  if (desc.assignee_id) return { assignee_id: workerId };
+  if (desc.worker_id)   return { worker_id: workerId };
+  if (desc.user_id)     return { user_id: workerId };
+  // якщо в таблиці немає прив'язки до користувача — повертаємо без фільтра
+  return {};
+}
 
-const findActiveTasksByWorker = async (workerId) => {
-    console.log('id' + workerId)
-    const tasks = await Task.findAll({
-      where: {
-        workerId,
-        status: 'todo',
-      },
-    });
-    console.log(tasks)
-    return tasks.map(task => task.dataValues);
+// Використовує app.js: findActiveTasksByWorker(worker.id)
+export async function findActiveTasksByWorker(workerId) {
+  const where = {
+    status: { [Op.notIn]: ['done', 'closed'] },
+    ...(await assigneeWhere(workerId)),
   };
+  return Task.findAll({
+    where,
+    order: [['id', 'DESC']],
+    limit: 25,
+  });
+}
 
-const markTaskAsDone = async (taskId) => {
-    await Task.update({ status: 'done' }, { where: { id: taskId } });
-};
-  
-
-import { Worker } from './workers.js';   
-Task.belongsTo(Worker, { foreignKey: 'workerId' });
-Worker.hasMany(Task, { foreignKey: 'workerId' });
-
-export { 
-    Task,
-    findActiveTasksByWorker,
-    markTaskAsDone
- };
-
-
+// Використовує app.js: markTaskAsDone(taskId)
+export async function markTaskAsDone(taskId) {
+  await Task.update({ status: 'done' }, { where: { id: taskId } });
+}

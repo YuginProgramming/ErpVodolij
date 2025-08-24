@@ -8,9 +8,12 @@ import axios from 'axios';
 import { getShiftDuration } from './modules/shift-duration.js';
 import { getRouteDistanceAndMapLink } from './models/distance-link.js';
 import { findActiveTasksByWorker, markTaskAsDone } from './models/tasks.js';
+import 'dotenv/config';
+import { pingDb } from './models/sequelize.js';
 
 export const bot = new TelegramBot(dataBot.telegramBotToken, { polling: true });
 
+await pingDb();
 
 const findNearestCoordinate = (coordinates, targetCoordinate) => {
 
