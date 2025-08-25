@@ -1,12 +1,12 @@
 import { Sequelize } from 'sequelize';
 
 export const sequelize = new Sequelize(
-  process.env.DB_NAME || 'vodolijdb',
-  process.env.DB_USER || 'vodolij',
-  process.env.DB_PASS || 'REDACTED',
+  process.env.DB_NAME,
+  process.env.DB_USER,
+  process.env.DB_PASS,
   {
-    host: process.env.DB_HOST || '49.13.142.186', 
-    port: Number(process.env.DB_PORT || 5432),
+    host: process.env.DB_HOST, 
+    port: Number(process.env.DB_PORT),
     dialect: 'postgres',
     logging: false,
   }
