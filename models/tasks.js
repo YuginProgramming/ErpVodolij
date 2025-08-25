@@ -10,6 +10,7 @@ export const Task = sequelize.define('Task', {
     status:      { type: DataTypes.TEXT },
     priority:    { type: DataTypes.TEXT },
     deviceId:    { type: DataTypes.INTEGER, field: 'deviceId' },
+    workerId:    { type: DataTypes.INTEGER, field: 'workerId' },
   }, {
     tableName: 'tasks',
     schema: 'public',
@@ -31,10 +32,10 @@ async function assigneeWhere(workerId) {
 export async function findActiveTasksByWorker(workerId) {
   const where = {
     status: { [Op.notIn]: ['done', 'closed'] },
-    ...(await assigneeWhere(workerId)),
+    workerId,
   };
   return Task.findAll({
-    where,
+    where,  
     order: [['id', 'DESC']],
     limit: 25,
   });
@@ -51,7 +52,11 @@ export async function createTaskForWorker({ title, description = null, assigneeW
   const desc = await qi.describeTable('tasks'); // map of columns
 
   // Decide real column names
-  const assigneeCol = ['assignee_id', 'worker_id', 'user_id'].find(c => !!desc[c]);
+  // const assigneeCol = ['assignee_id', 'worker_id', 'user_id'].find(c => !!desc[c]);
+  const assigneeCol =
+  (desc.workerId && 'workerId') ||           
+  (desc.worker_id && 'worker_id') ||
+  (desc.assignee_id && 'assignee_id') || null;
   const deviceCol   = desc.deviceId ? 'deviceId' : (desc.device_id ? 'device_id' : null);
 
   const cols = ['title', 'status', 'priority'];
@@ -59,12 +64,16 @@ export async function createTaskForWorker({ title, description = null, assigneeW
   const params = ['$1', '$2', '$3'];
   let p = 3;
 
+  if (assigneeCol && assigneeWorkerId) {
+    cols.push(assigneeCol); vals.push(assigneeWorkerId); params.push(`$${++p}`);
+  }
+
   if (description !== null && desc.description) {
     cols.push('description'); vals.push(description); params.push(`$${++p}`);
   }
-  if (assigneeCol) {
-    cols.push(assigneeCol); vals.push(assigneeWorkerId); params.push(`$${++p}`);
-  }
+  // if (assigneeCol) {
+  //   cols.push(assigneeCol); vals.push(assigneeWorkerId); params.push(`$${++p}`);
+  // }
   if (deviceId !== null && deviceCol) {
     cols.push(deviceCol); vals.push(deviceId); params.push(`$${++p}`);
   }

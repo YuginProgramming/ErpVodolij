@@ -147,7 +147,27 @@ bot.on('text', async (msg) => {
     newTaskWizard.delete(chatId);
     return bot.sendMessage(chatId, 'Створення скасовано.');
   }
-
+  
+  if (st.step === 'assignee') {
+    let assigneeId;
+    const raw = (msg.text || '').trim().toLowerCase();
+  
+    if (raw === 'me') {
+      const me = await findWorkerByChatId(chatId);  // у вас це вже є
+      if (!me) return bot.sendMessage(chatId, 'Спочатку /start для реєстрації.');
+      assigneeId = me.id;
+    } else {
+      assigneeId = Number(raw);
+      if (!Number.isInteger(assigneeId)) {
+        return bot.sendMessage(chatId, 'workerId має бути числом або напишіть "me". Спробуйте ще раз:');
+      }
+    }
+  
+    st.data.assigneeId = assigneeId;     // ✅ зберігаємо вибір
+    st.step = 'device';
+    return bot.sendMessage(chatId, 'ID апарата (або "-" якщо не вказувати):');
+  }
+  
   if (st.step === 'title') {
     const title = (msg.text || '').trim();
     if (!title) return bot.sendMessage(chatId, 'Заголовок не може бути порожнім. Введіть заголовок або /cancel.');
@@ -158,13 +178,22 @@ bot.on('text', async (msg) => {
   }
 
   if (st.step === 'description') {
-    const description = (msg.text || '').trim();
-    st.data.description = description === '-' ? null : description;
-
-    // Optional: ask for deviceId; skip if you don’t need it
-    st.step = 'device';
-    return bot.sendMessage(chatId, 'ID апарата (або "-" якщо не вказувати):');
+    st.data.description = (msg.text?.trim() === '-') ? null : msg.text.trim();
+    st.step = 'assignee';
+    return bot.sendMessage(chatId,
+      'Кому призначити? Введіть *workerId* (число) або напишіть *me* якщо виконавець — ви.',
+      { parse_mode: 'Markdown' }
+    );
   }
+
+  // if (st.step === 'description') {
+  //   const description = (msg.text || '').trim();
+  //   st.data.description = description === '-' ? null : description;
+
+  //   // Optional: ask for deviceId; skip if you don’t need it
+  //   st.step = 'device';
+  //   return bot.sendMessage(chatId, 'ID апарата (або "-" якщо не вказувати):');
+  // }
 
   if (st.step === 'device') {
     const raw = (msg.text || '').trim();
@@ -205,26 +234,23 @@ bot.on('text', async (msg) => {
 
   if (st.step === 'confirm') {
     if ((msg.text || '').trim().toLowerCase() !== 'ok') {
-      return bot.sendMessage(chatId, 'Надішліть "ok" для підтвердження або /cancel.');
+      return bot.sendMessage(chatId, 'Надішліть "ok" або /cancel.');
     }
-
-    const worker = await findWorkerByChatId(chatId); // assignee = self
-    if (!worker) {
-      newTaskWizard.delete(chatId);
-      return bot.sendMessage(chatId, 'Користувача не знайдено. Запустіть /start.');
-    }
-
+  
+    const me = await findWorkerByChatId(chatId); // автор
     const taskId = await createTaskForWorker({
       title: st.data.title,
       description: st.data.description,
-      deviceId: st.data.deviceId,
       priority: st.data.priority,
-      assigneeWorkerId: worker.id
+      deviceId: st.data.deviceId,
+      assigneeWorkerId: st.data.assigneeId,   // ✅ ВИКОНАВЕЦЬ
+      creatorWorkerId: me?.id,                // (опційно, якщо є така колонка)
     });
-
+  
     newTaskWizard.delete(chatId);
-    return bot.sendMessage(chatId, `✅ Задачу #${taskId} створено (статус: todo).`);
+    return bot.sendMessage(chatId, `✅ Задачу #${taskId} призначено виконавцю #${st.data.assigneeId}.`);
   }
+  
 });
 
 
