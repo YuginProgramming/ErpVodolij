@@ -5,7 +5,7 @@ export const sequelize = new Sequelize(
   process.env.DB_USER || 'vodolij',
   process.env.DB_PASS || 'REDACTED',
   {
-    host: process.env.DB_HOST || '49.13.142.186', // якщо бот крутиться на цьому ж сервері — краще '127.0.0.1'
+    host: process.env.DB_HOST || '49.13.142.186', 
     port: Number(process.env.DB_PORT || 5432),
     dialect: 'postgres',
     logging: false,

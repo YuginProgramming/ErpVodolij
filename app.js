@@ -37,14 +37,14 @@ const newTaskWizard = new Map(); // key: chatId -> { step, data }
 
 async function installCommands() {
   const commands = [
-    { command: '/start',      description: 'Почати спочатку' },
-    { command: '/tasks',      description: 'Мої відкриті задачі' },
+    { command: '/start', description: 'Почати спочатку' },
+    { command: '/tasks', description: 'Мої відкриті задачі' },
     { command: '/tasks_todo', description: 'Усі TODO задачі' },
-    { command: '/tasks_all',  description: 'Усі відкриті задачі' },
-    { command: '/newtask',    description: 'Створити задачу' },
-    { command: '/users',      description: 'Виконавці' },
-    { command: '/setname',    description: 'Перейменувати виконавця (адмін)' },
-    { command: '/cancel',     description: 'Скасувати створення' },
+    { command: '/tasks_all', description: 'Усі відкриті задачі' },
+    { command: '/newtask', description: 'Створити задачу' },
+    { command: '/users', description: 'Виконавці' },
+    { command: '/setname', description: 'Перейменувати виконавця (адмін)' },
+    { command: '/cancel', description: 'Скасувати створення' },
   ];
 
   // 1) Clear old definitions across common scopes
@@ -99,7 +99,7 @@ bot.onText(/\/start/, async (msg) => {
       }
     });
 
-  } else {}
+  } else { }
 
 });
 
@@ -245,7 +245,7 @@ bot.on('text', async (msg) => {
     st.step = 'confirm';
 
     const preview =
-`Підтвердити створення задачі?
+      `Підтвердити створення задачі?
 
 Заголовок: ${st.data.title}
 Опис: ${st.data.description ?? '—'}
@@ -289,18 +289,13 @@ bot.on('text', async (msg) => {
 bot.on("message", async (msg) => {
 
   const chatId = msg.chat.id;
-
   if (msg.contact) {
-
     await updateWorkerByChatId(chatId, {
-
       name: msg.contact.first_name,
       phone: msg.contact.phone_number,
-
     })
 
     bot.sendMessage(msg.chat.id, startShift(), locationKeyboard());
-
   }
 
 });
@@ -308,25 +303,17 @@ bot.on("message", async (msg) => {
 bot.on("location", async (msg) => {
 
   const chatId = msg.chat.id;
-
   const worker = await findWorkerByChatId(chatId);
-
   console.log(worker.dialoguestatus)
-
   console.log(worker.active)
 
   if (!worker.active) {
 
     await updateWorkerByChatId(chatId, { active: true })
-
     const locations = await axios.get('http://soliton.net.ua/water/api/devices');
-
     const targetCoordinate = { lat: msg.location.latitude, lon: msg.location.longitude };
-
     const nearest = findNearestCoordinate(locations.data.devices, targetCoordinate);
-
     const address = await geocode(targetCoordinate);
-
     await createNewPoint({
 
       user_id: worker.id,
@@ -339,9 +326,6 @@ bot.on("location", async (msg) => {
     });
 
     //Зміну розпочато
-
-
-
     const message =
       `🔔 Зміну розпочато.\n` +
       `Ви знаходитесь за адресою: ${address}.\n` +
@@ -353,11 +337,8 @@ bot.on("location", async (msg) => {
   } else {
 
     const locations = await axios.get('http://soliton.net.ua/water/api/devices');
-
     const targetCoordinate = { lat: msg.location.latitude, lon: msg.location.longitude };
-
     const nearest = findNearestCoordinate(locations.data.devices, targetCoordinate);
-
     const address = await geocode(targetCoordinate);
 
     switch (worker.dialoguestatus) {
@@ -458,9 +439,7 @@ bot.on("location", async (msg) => {
         bot.sendMessage(msg.chat.id, repairMessage, processKeyb());
 
         break;
-
     }
-
   }
 
 });
@@ -474,34 +453,28 @@ bot.on('callback_query', async (callbackQuery) => {
   switch (data) {
 
     case 'end_shift':
-
       await updateWorkerByChatId(chatId, { dialoguestatus: 'end_shift' });
       bot.sendMessage(chatId, 'Для завершення зміни натисніть кнопку, щоб поділитися своєю локацією.', locationKeyboard());
 
       break;
 
     case 'service_machine':
-
       await updateWorkerByChatId(chatId, { dialoguestatus: 'service_machine' });
       bot.sendMessage(chatId, 'По завершенню роботи натисніть кнопку, щоб поділитися своєю локацією.', locationKeyboard());
       break;
 
     case 'cash_collection':
-
       await updateWorkerByChatId(chatId, { dialoguestatus: 'cash_collection' });
       bot.sendMessage(chatId, 'По завершенню роботи натисніть кнопку, щоб поділитися своєю локацією.', locationKeyboard());
       break;
 
     case 'repair':
-
       await updateWorkerByChatId(chatId, { dialoguestatus: 'repair' });
       bot.sendMessage(chatId, 'По завершенню роботи натисніть кнопку, щоб поділитися своєю локацією.', locationKeyboard());
       break;
 
     case 'start_shift':
-
       bot.sendMessage(msg.chat.id, startShift(), locationKeyboard());
-
       break;
 
     default:
@@ -510,7 +483,6 @@ bot.on('callback_query', async (callbackQuery) => {
         const taskId = data.split('_')[1];
 
         await markTaskAsDone(taskId);
-
         await bot.editMessageReplyMarkup(
           { inline_keyboard: [] },
           {

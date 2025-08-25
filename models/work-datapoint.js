@@ -1,6 +1,5 @@
 import { Model, DataTypes, Op } from "sequelize";
 import { sequelize } from './sequelize.js';
-
 //import { logger } from '../logger/index.js';
 
 class WorkDatapoint extends Model {}
@@ -45,7 +44,7 @@ const createNewPoint = async (dataPoint) => {
         res = res.dataValues;
     } catch (err) {
         // logger.error(`Impossible to create Bonus: ${err}`);
-        throw err;  // або обробляй помилку як треба
+        throw err;  
     }
     return res;
 };
@@ -78,4 +77,3 @@ export {
     createNewPoint,
     todayPoins
 };   
-

@@ -1,4 +1,3 @@
-// scripts/db-smoke.js
 import { sequelize, Task } from './models/sequelize.js';
 
 try {
