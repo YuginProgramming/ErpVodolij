@@ -27,16 +27,39 @@ async function assigneeWhere(workerId) {
   return {};
 }
 
-// Використовує app.js: findActiveTasksByWorker(worker.id)
-export async function findActiveTasksByWorker(workerId) {
+// ---- helpers for status filters
+function statusWhere(kind) {
+  const k = (kind || '').toLowerCase();
+  if (k === 'todo') {
+    // strictly TODO
+    return { status: { [Op.iLike]: 'todo' } };
+  }
+  if (k === 'open') {
+    // everything that is NOT done/closed
+    return { status: { [Op.notIn]: ['done', 'closed'] } };
+  }
+  // fallback: no status filter
+  return {};
+}
+
+// "мої" відкриті задачі (за замовчуванням)
+export async function findActiveTasksByWorker(workerId, { status = 'open', limit = 100, offset = 0, includeUnassigned = false } = {}) {
   const where = {
-    status: { [Op.notIn]: ['done', 'closed'] },
-    workerId,
+    ...statusWhere(status),
+    ...(includeUnassigned
+      ? { [Op.or]: [{ workerId }, { workerId: null }] }
+      : { workerId }),
   };
+  return Task.findAll({ where, order: [['id', 'DESC']], limit, offset });
+}
+
+// всі відкриті задачі (для огляду по команді)
+export async function findActiveTasksAll({ status = 'open', limit = 200, offset = 0 } = {}) {
   return Task.findAll({
-    where,  
+    where: { ...statusWhere(status) },
     order: [['id', 'DESC']],
-    limit: 25,
+    limit,
+    offset,
   });
 }
 
@@ -92,4 +115,5 @@ export async function createTaskForWorker({ title, description = null, assigneeW
   const [rows] = await sequelize.query(sql, { bind: vals });
   return rows[0]?.id;
 }
+
 

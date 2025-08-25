@@ -7,7 +7,7 @@ import geocode from './modules/geocode.js';
 import axios from 'axios';
 import { getShiftDuration } from './modules/shift-duration.js';
 import { getRouteDistanceAndMapLink } from './models/distance-link.js';
-import { findActiveTasksByWorker, markTaskAsDone, createTaskForWorker } from './models/tasks.js';
+import { findActiveTasksByWorker, markTaskAsDone, createTaskForWorker, findActiveTasksAll } from './models/tasks.js';
 import 'dotenv/config';
 import { pingDb } from './models/sequelize.js';
 
@@ -35,11 +35,37 @@ const findNearestCoordinate = (coordinates, targetCoordinate) => {
 
 const newTaskWizard = new Map(); // key: chatId -> { step, data }
 
-bot.setMyCommands([
-  { command: '/start', description: 'Почати спочатку' },
-  { command: '/tasks', description: 'Список завдань' },
-  { command: '/newtask', description: 'Створити задачу' }
-]);
+async function installCommands() {
+  const commands = [
+    { command: '/start',      description: 'Почати спочатку' },
+    { command: '/tasks',      description: 'Мої відкриті задачі' },
+    { command: '/tasks_todo', description: 'Усі TODO задачі' },
+    { command: '/tasks_all',  description: 'Усі відкриті задачі' },
+    { command: '/newtask',    description: 'Створити задачу' },
+    { command: '/users',      description: 'Виконавці' },
+    { command: '/setname',    description: 'Перейменувати виконавця (адмін)' },
+    { command: '/cancel',     description: 'Скасувати створення' },
+  ];
+
+  // 1) Clear old definitions across common scopes
+  await bot.setMyCommands([], { scope: { type: 'default' } });
+  await bot.setMyCommands([], { scope: { type: 'all_private_chats' } });
+  await bot.setMyCommands([], { scope: { type: 'all_group_chats' } });
+
+  // 2) Set for default + private + groups (so it shows everywhere)
+  await bot.setMyCommands(commands); // default
+  await bot.setMyCommands(commands, { scope: { type: 'all_private_chats' } });
+  await bot.setMyCommands(commands, { scope: { type: 'all_group_chats' } });
+
+  // 3) Sanity check
+  const current = await bot.getMyCommands();
+  console.log('[BOT] Commands installed:', current);
+}
+
+await installCommands();
+
+const me = await bot.getMe();
+console.log('[BOT] Running as', me.username);
 
 bot.onText(/\/start/, async (msg) => {
 
@@ -77,41 +103,45 @@ bot.onText(/\/start/, async (msg) => {
 
 });
 
-bot.onText(/\/tasks/, async (msg) => {
-
+// мої відкриті (open = все крім done/closed)
+bot.onText(/\/tasks$/, async (msg) => {
   const chatId = msg.chat.id;
-  const worker = await findWorkerByChatId(chatId);
+  const me = await findWorkerByChatId(chatId);
+  if (!me) return bot.sendMessage(chatId, 'Спершу /start.');
 
-  console.log(worker.id)
-  if (worker) {
+  // якщо треба бачити і непризначені (NULL) поруч із "моїми":
+  const tasks = await findActiveTasksByWorker(me.id, { status: 'open', limit: 100, includeUnassigned: false });
 
-    const tasks = await findActiveTasksByWorker(worker.id);
+  if (!tasks.length) return bot.sendMessage(chatId, '🎉 У вас немає активних завдань!');
+  for (const t of tasks) {
+    const taskText = `📌 *${t.title}*\n🗒️ ${t.description || 'Без опису'}\n📟 Апарат: ${t.deviceId ?? '—'}\n🎯 Пріоритет: ${t.priority ?? 'normal'}\n👤 workerId: ${t.workerId ?? '—'}`;
+    await bot.sendMessage(chatId, taskText, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: [[{ text: '✅ Виконано', callback_data: `done_${t.id}` }]] }
+    });
+  }
+});
 
-    console.log(tasks);
+// всі відкриті (для огляду всієї дошки)
+bot.onText(/\/tasks_all$/, async (msg) => {
+  const chatId = msg.chat.id;
+  const tasks = await findActiveTasksAll({ status: 'open', limit: 200 });
+  if (!tasks.length) return bot.sendMessage(chatId, 'Відкритих завдань немає.');
+  for (const t of tasks) {
+    const taskText = `[#${t.id}] *${t.title}* — ${t.status}\n👤 workerId: ${t.workerId ?? '—'}\n🗒️ ${t.description || '—'}\n📟 ${t.deviceId ?? '—'}\n🎯 ${t.priority ?? 'normal'}`;
+    await bot.sendMessage(chatId, taskText, { parse_mode: 'Markdown' });
+  }
+});
 
-    if (!tasks || tasks.length === 0) {
-      return bot.sendMessage(chatId, '🎉 У вас немає активних завдань!');
-    }
-
-    for (const task of tasks) {
-      const taskText = `📌 *${task.title}*\n🗒️ ${task.description || 'Без опису'}\n📟  Апарат: ${task.deviceId || 'Невідомо'}\n🎯 Пріоритет: ${task.priority || 'Нормальний'}`;
-
-      await bot.sendMessage(chatId, taskText, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [[
-            {
-              text: '✅ Виконано',
-              callback_data: `done_${task.id}`,
-            }
-          ]]
-        }
-      });
-
-    }
-
-  } else {}
-
+// тільки TODO (всі, незалежно від виконавця)
+bot.onText(/\/tasks_todo$/, async (msg) => {
+  const chatId = msg.chat.id;
+  const tasks = await findActiveTasksAll({ status: 'todo', limit: 200 });
+  if (!tasks.length) return bot.sendMessage(chatId, 'TODO задач немає.');
+  for (const t of tasks) {
+    const taskText = `[#${t.id}] *${t.title}*\n👤 workerId: ${t.workerId ?? '—'}\n🗒️ ${t.description || '—'}`;
+    await bot.sendMessage(chatId, taskText, { parse_mode: 'Markdown' });
+  }
 });
 
 // 1) Entry point: ask for title
