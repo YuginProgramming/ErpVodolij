@@ -1,4 +1,3 @@
-// models/tasks.js
 import { DataTypes, Op } from 'sequelize';
 import { sequelize } from './sequelize.js';
 
@@ -71,9 +70,7 @@ export async function createTaskForWorker({ title, description = null, assigneeW
   if (description !== null && desc.description) {
     cols.push('description'); vals.push(description); params.push(`$${++p}`);
   }
-  // if (assigneeCol) {
-  //   cols.push(assigneeCol); vals.push(assigneeWorkerId); params.push(`$${++p}`);
-  // }
+
   if (deviceId !== null && deviceCol) {
     cols.push(deviceCol); vals.push(deviceId); params.push(`$${++p}`);
   }

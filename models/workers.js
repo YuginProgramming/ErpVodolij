@@ -1,74 +1,63 @@
-import { Model, DataTypes } from "sequelize";
+import { Model, DataTypes, Op } from 'sequelize';
 import { sequelize } from './sequelize.js';
-//import { logger } from '../logger/index.js';
-
 
 class Worker extends Model {}
-Worker.init({
-    chat_id: {
-        type: DataTypes.BIGINT,
-        allowNull: false,
-        unique: true
-    },
-    name: {
-        type: DataTypes.STRING,
-        allowNull: true
-    },
-    phone: {
-        type: DataTypes.STRING,
-        allowNull: true
-    },
-    active: {
-        type: DataTypes.BOOLEAN,
-        allowNull: true
-    },
-    dialoguestatus: {
-        type: DataTypes.STRING,
-        allowNull: true,
-        defaultValue: ''
-    }
 
+Worker.init({
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  chat_id: { type: DataTypes.BIGINT, allowNull: false, unique: true },
+  name: { type: DataTypes.STRING, allowNull: true },
+  phone: { type: DataTypes.STRING, allowNull: true },
+  active: { type: DataTypes.BOOLEAN, allowNull: true },
+  dialoguestatus: { type: DataTypes.STRING, allowNull: true, defaultValue: '' },
 }, {
-    freezeTableName: false,
-    timestamps: false,
-    modelName: 'workers',
-    sequelize
+  sequelize,
+  modelName: 'Worker',
+  tableName: 'workers',
+  schema: 'public',
+  freezeTableName: true,
+  timestamps: false,
 });
 
+export { Worker };
 
-const createNewWorkerByChatId = async (chat_id) => {
-    let res;
-    try {
-        res = await Worker.create({ chat_id });
-        res = res.dataValues;
-    } catch (err) {
-//        logger.error(`Impossible to create user: ${err}. Chat id ${chat_id}`);
-    }
-    return res;
-};
+export async function createNewWorkerByChatId(chat_id) {
+  const [rec] = await Worker.findOrCreate({ where: { chat_id }, defaults: { active: true } });
+  return rec?.get();
+}
 
-const updateWorkerByChatId = async (chat_id, updateParams) => {
-    const res = await Worker.update({ ...updateParams } , { where: { chat_id } });
-    if (res[0]) {
-        const data = await findWorkerByChatId(chat_id);
-        if (data) {
-            return data;
-        }
-//        logger.info(`User ${chat_id} updated, but can't read result data`);
-    } 
-    return undefined;
-};
+export async function updateWorkerByChatId(chat_id, updateParams) {
+  await Worker.update({ ...updateParams }, { where: { chat_id } });
+  return findWorkerByChatId(chat_id);
+}
 
+export async function findWorkerByChatId(chat_id) {
+  const res = await Worker.findOne({ where: { chat_id } });
+  return res?.get() ?? null;
+}
 
-const findWorkerByChatId = async (chat_id) => {
-    const res = await Worker.findOne({ where: { chat_id: chat_id } });
-    if (res) return res.dataValues;
-    return res;
-};
+export async function findWorkerById(id) {
+  const res = await Worker.findByPk(id);
+  return res?.get() ?? null;
+}
 
-export {
-    Worker,
-    createNewWorkerByChatId,
-    updateWorkerByChatId,
-    findWorkerByChatId,
-};   
+export async function listWorkersBrief(limit = 20) {
+  const rows = await Worker.findAll({
+    attributes: ['id', 'name'],
+    order: [['id', 'ASC']],
+    limit,
+  });
+  return rows.map(r => ({ id: r.id, display: r.name || `worker_${r.id}` }));
+}
+
+export async function setWorkerName(id, name) {
+  await Worker.update({ name }, { where: { id } });
+}
+
+// (опц.) пошук по імені/цифрі
+export async function findWorkerIdByInput(input) {
+  const raw = (input || '').trim();
+  if (/^\d+$/.test(raw)) return Number(raw);
+  const res = await Worker.findOne({ where: { name: { [Op.iLike]: raw } } });
+  return res?.id ?? null;
+}
